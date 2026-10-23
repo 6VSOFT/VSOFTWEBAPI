@@ -524,6 +524,7 @@ dList.addEventListener('click', e => {
 document.addEventListener('click', e => { if (!e.target.closest('.combo')) closeDebtorList(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDebtorList(); });
 // ---- Item code dropdown: list stock items from GET /api/Item/GetItem (V2 only) ----
+const ITEM_LIMIT = 50;   // only the first 50 items are offered in the dropdown
 let items = null;    // cached after the first successful load
 let itemRow = null;  // the <tr> the open list belongs to
 const iList = document.createElement('div');
@@ -541,7 +542,7 @@ async function loadItems() {
   let j; try { j = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
   const arr = Array.isArray(j) ? j : j.ResultTable;
   if (!Array.isArray(arr)) throw new Error(j.Message || '没有取得货品列表');
-  return arr.filter(x => x && x.ItemCode && x.IsActive !== 'F');
+  return arr.filter(x => x && x.ItemCode && x.IsActive !== 'F').slice(0, ITEM_LIMIT);
 }
 
 function itemDefaults(x) {
