@@ -304,7 +304,9 @@ const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Strips spaces, quotes and braces that sneak in when copying from Postman.
 function cleanAppId() { return $('appId').value.trim().replace(/^["'{]+|["'}]+$/g, '').trim(); }
 
-const viaProxy =['127.0.0.1', 'localhost'].includes(location.hostname) && location.protocol === 'http:';
+// Served over http(s) (server.js locally, or the Netlify function online) the page calls /api/* on its own
+// origin and the server forwards it to the gateway (no CORS). Opened from a file it calls the gateway directly.
+const viaProxy = location.protocol === 'http:' || location.protocol === 'https:';
 function api(base, path, opts = {}) {
   const headers = { ...(opts.headers || {}) };
   const appId = cleanAppId();

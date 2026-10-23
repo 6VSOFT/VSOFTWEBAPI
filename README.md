@@ -2,12 +2,19 @@
 
 一个网页表单,用来把销售发票(Sales Invoice)提交到 VSOFT Web API(AutoCount)。
 
+在线版:<https://vsoftwebapi.netlify.app>
+
 ## 文件
 
 - `sales-invoice.html`:发票表单页面。
-- `server.js`:本机小服务器,提供页面,并把 `/api/*` 请求转发给 VSOFT 网关(避免浏览器 CORS 拦截)。只允许转发到 `vsoftapi.vsoft2u.my`。
+- `server.js`:本机小服务器,提供页面,并把 `/api/*` 请求转发给 VSOFT 网关(避免浏览器 CORS 拦截)。
+- `netlify/functions/proxy.mts`:在线版使用的同样的转发代理(Netlify 函数)。
+- `netlify.toml`:Netlify 设置,发布 `public` 文件夹。
+- `public/index.html`:`sales-invoice.html` 的副本,供 Netlify 发布。改页面时两处要一起更新。
 
-## 运行
+两个代理都只允许转发到 `vsoftapi.vsoft2u.my`。
+
+## 本机运行
 
 需要 [Node.js](https://nodejs.org) 18 或更新版本。
 
@@ -31,8 +38,13 @@ http://127.0.0.1:8765/sales-invoice.html
 
 发送流程:先 `POST /api/Server/Login` 取得 Token,再 `POST /api/Invoice` 提交发票。成功后页面会显示发票号码。
 
+## 部署到 Netlify
+
+站点发布 `public/` 文件夹,`/api/*` 由 `netlify/functions/proxy.mts` 处理,无需额外环境变量。可用 Netlify 的 Git 连接部署,或在项目目录运行 `netlify deploy --prod`。
+
 ## 注意
 
-- 服务器只监听 `127.0.0.1`,仅本机可访问。
+- `server.js` 只监听 `127.0.0.1`,仅本机可访问。
+- 在线版网址是公开的,但发送发票需要有效的 AppId、账号和密码。
 - 本仓库不包含任何账号、密码或 AppId。
 - 发票号码留空时由 AutoCount 自动编号;填写固定号码时不能重复。

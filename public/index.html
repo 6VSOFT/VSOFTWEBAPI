@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generate Sales Invoice</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --ink:#1c2430; --mute:#6b7585; --line:#dde1e8; --accent:#1f6feb; --ok:#1a7f37; --err:#cf222e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151a; --card:#1a1f27; --ink:#e6e9ee; --mute:#8b95a5; --line:#2b323d; --accent:#58a6ff; --ok:#3fb950; --err:#f85149; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1000px; margin:0 auto; padding:16px; display:grid; gap:16px; }
+  h1 { font-size:20px; margin:0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; }
+  .card h2 { font-size:15px; margin:0 0 12px; }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
+  label { display:block; font-size:12px; color:var(--mute); margin-bottom:2px; }
+  input, select, textarea { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); font:inherit; }
+  textarea { font-family:ui-monospace,Consolas,monospace; font-size:12px; min-height:110px; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:var(--mute); font-weight:500; padding:4px 4px; }
+  td { padding:3px 3px; vertical-align:middle; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; padding-right:8px; }
+  .lines-wrap { overflow-x:auto; }
+  .lines-wrap table { min-width:760px; }
+  button { padding:7px 14px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); font:inherit; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .totals { margin-left:auto; width:260px; max-width:100%; }
+  .totals div { display:flex; justify-content:space-between; padding:2px 0; font-variant-numeric:tabular-nums; }
+  .totals .grand { font-weight:600; border-top:1px solid var(--line); margin-top:4px; padding-top:6px; font-size:16px; }
+  #status { font-size:13px; }
+  #status.ok { color:var(--ok); } #status.err { color:var(--err); }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; overflow:auto; max-height:260px; font-size:12px; margin:8px 0 0; }
+  details summary { cursor:pointer; font-weight:600; }
+  .note { color:var(--mute); font-size:12px; margin:6px 0 0; }
+
+  /* Printable invoice */
+  #print { display:none; }
+  @media print {
+    body { background:#fff; color:#000; }
+    main > :not(#print) { display:none; }
+    #print { display:block; }
+  }
+  .inv { background:#fff; color:#000; padding:24px; font-size:13px; }
+  .inv h3 { margin:0 0 4px; font-size:22px; }
+  .inv table th, .inv table td { border-bottom:1px solid #ccc; padding:6px 4px; color:#000; }
+  .inv .meta { display:flex; justify-content:space-between; margin:12px 0; gap:16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Generate Sales Invoice</h1>
+
+  <details class="card" id="conn">
+    <summary>连接设置 (VSOFT Web API)</summary>
+    <div class="grid" style="margin-top:12px">
+      <div><label>环境</label>
+        <select id="env">
+          <option value="http://vsoftapi.vsoft2u.my:9696">Demo Server (API :9696)</option>
+          <option value="https://vsoftapi.vsoft2u.my:19696">Production (HTTPS :19696)</option>
+          <option value="">自定义</option>
+        </select></div>
+      <div><label>Base URL</label><input id="baseUrl" value="http://vsoftapi.vsoft2u.my:9696"></div>
+      <div><label>Login 路径</label><input id="loginPath" value="/api/Server/Login"></div>
+      <div><label>Invoice 路径 (按文档填写)</label><input id="invPath" value="/api/Invoice"></div>
+      <div><label>AppId (请求头)</label><input id="appId" autocomplete="off"></div>
+      <div><label>账号 (UserID)</label><input id="user" autocomplete="off"></div>
+      <div><label>密码</label><input id="pass" type="password" autocomplete="off"></div>
+    </div>
+    <div style="margin-top:12px"><label>Login 请求体 (JSON,{{user}} / {{pass}} 会被替换)</label>
+      <textarea id="loginBody">{ "UserID": "{{user}}", "Password": "{{pass}}" }</textarea></div>
+    <div class="grid" style="margin-top:12px">
+      <div><label>Token 在响应中的字段名</label><input id="tokenField" value="Token"></div>
+      <div><label>Authorization 头的内容</label>
+        <select id="authMode">
+          <option value="jwt" selected>JWTToken(没有则用 Token)</option>
+          <option value="token">Token</option>
+          <option value="bearer">Bearer + JWTToken</option>
+        </select></div>
+    </div>
+    <p class="note">账号密码和 token 只保存在当前页面内存中,不会写入浏览器存储。路径和字段名我没能从 Postman 文档确认,请对照 VSOFT 文档修改。</p>
+  </details>
+
+  <section class="card">
+    <h2>发票抬头</h2>
+    <div class="grid">
+      <div><label>客户代码 (Debtor Code)</label><input id="debtor" value="300-G123" placeholder="300-G123"></div>
+      <div><label>客户名称</label><input id="company"></div>
+      <div><label>发票号码 (留空自动)</label><input id="docNo" placeholder="例如 IV-00004,留空自动"></div>
+      <div><label>日期</label><input id="docDate" type="date"></div>
+      <div><label>付款期限 (Credit Term)</label><input id="terms" placeholder="30 Days"></div>
+      <div><label>币种</label><input id="currency" value="MYR"></div>
+      <div><label>参考 (Ref / PO)</label><input id="ref"></div>
+      <div><label>业务员 (Sales Agent)</label><input id="agent"></div>
+      <div><label>单据状态 (DocStatus)</label>
+        <select id="docStatus"><option value="A" selected>A</option><option value="">不发送</option><option value="D">D</option></select></div>
+      <div><label>提交 E-Invoice (SubmitEInvoice)</label>
+        <select id="submitEInv"><option value="T" selected>T(是)</option><option value="F">F(否)</option></select></div>
+      <div><label>合并 E-Invoice (ConsolidatedEInvoice)</label>
+        <select id="consolEInv"><option value="F" selected>F(否)</option><option value="T">T(是)</option></select></div>
+    </div>
+    <div style="margin-top:12px"><label>备注</label><input id="remark"></div>
+  </section>
+
+  <section class="card">
+    <h2>明细</h2>
+    <div class="lines-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:16%">货品代码</th><th>描述</th><th style="width:9%">数量</th>
+          <th style="width:9%">单位</th><th style="width:13%">单价</th><th style="width:9%">折扣%</th>
+          <th style="width:9%">税码</th><th style="width:9%">税率%</th><th style="width:12%;text-align:right">小计</th><th style="width:4%"></th>
+        </tr></thead>
+        <tbody id="lines"></tbody>
+      </table>
+    </div>
+    <div class="row" style="margin-top:10px"><button id="addLine">+ 添加行</button></div>
+    <div class="totals">
+      <div><span>小计</span><span id="tSub">0.00</span></div>
+      <div><span>税额</span><span id="tTax">0.00</span></div>
+      <div class="grand"><span>总计</span><span id="tTotal">0.00</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>输出</h2>
+    <div class="row">
+      <button id="btnPrint">打印 / 存 PDF</button>
+      <button id="btnJson">查看 JSON</button>
+      <button id="btnCopy">复制 JSON</button>
+      <button class="primary" id="btnSend">发送到 AutoCount</button>
+      <span id="status"></span>
+    </div>
+    <pre id="out" hidden></pre>
+    <p class="note">"发送"会先 Login 取 token,再 POST 发票 JSON。字段已按 Postman 的 Sales → Invoice → Create Invoice 对应(<code>toApiPayload()</code>)。</p>
+  </section>
+
+  <section id="print"><div class="inv" id="invoice"></div></section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const money = n => (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let token = null;
+
+$('docDate').value = new Date().toISOString().slice(0, 10);
+// Remember AppId and UserID in this browser only (never the password).
+const REMEMBER = ['appId', 'user', 'baseUrl', 'authMode'];
+try {
+  const saved = JSON.parse(localStorage.getItem('si-conn') || '{}');
+  for (const id of REMEMBER) if (saved[id]) $(id).value = saved[id];
+  $('env').value = [...$('env').options].some(o => o.value === $('baseUrl').value) ? $('baseUrl').value : '';
+} catch {}
+function saveConn() {
+  setTimeout(() => {
+    try { localStorage.setItem('si-conn', JSON.stringify(Object.fromEntries(REMEMBER.map(id => [id, $(id).value])))); } catch {}
+  }, 0);
+}
+for (const id of REMEMBER) $(id).addEventListener('change', saveConn);
+$('env').addEventListener('change', saveConn);
+$('env').onchange = () => { token = null; if ($('env').value) $('baseUrl').value = $('env').value; };
+$('baseUrl').oninput = () => { token = null; $('env').value = [...$('env').options].some(o => o.value === $('baseUrl').value) ? $('baseUrl').value : ''; };
+
+function addLine(v = {}) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input data-k="code" value="${esc(v.code)}"></td>
+    <td><input data-k="desc" value="${esc(v.desc)}"></td>
+    <td><input data-k="qty" type="number" min="0" step="any" value="${v.qty ?? 1}"></td>
+    <td><input data-k="uom" placeholder="默认" value="${esc(v.uom ?? '')}"></td>
+    <td><input data-k="price" type="number" min="0" step="any" value="${v.price ?? 0}"></td>
+    <td><input data-k="disc" type="number" min="0" max="100" step="any" value="${v.disc ?? 0}"></td>
+    <td><input data-k="taxCode" value="${esc(v.taxCode ?? '')}"></td>
+    <td><input data-k="taxRate" type="number" min="0" step="any" value="${v.taxRate ?? 0}"></td>
+    <td class="num" data-k="amt">0.00</td>
+    <td><button title="删除" data-del>×</button></td>`;
+  $('lines').appendChild(tr);
+  recalc();
+}
+
+function readLines() {
+  return [...$('lines').rows].map(tr => {
+    const g = k => tr.querySelector(`[data-k="${k}"]`).value;
+    const qty = +g('qty') || 0, price = +g('price') || 0, disc = +g('disc') || 0, taxRate = +g('taxRate') || 0;
+    const amount = qty * price * (1 - disc / 100);
+    return { code: g('code'), desc: g('desc'), qty, uom: g('uom'), price, disc, taxCode: g('taxCode'), taxRate, amount, tax: amount * taxRate / 100, tr };
+  });
+}
+
+function recalc() {
+  let sub = 0, tax = 0;
+  for (const l of readLines()) {
+    l.tr.querySelector('[data-k="amt"]').textContent = money(l.amount);
+    sub += l.amount; tax += l.tax;
+  }
+  $('tSub').textContent = money(sub);
+  $('tTax').textContent = money(tax);
+  $('tTotal').textContent = money(sub + tax);
+}
+
+$('lines').addEventListener('input', recalc);
+$('lines').addEventListener('click', e => {
+  if (e.target.matches('[data-del]')) { e.target.closest('tr').remove(); recalc(); }
+});
+$('addLine').onclick = () => addLine();
+
+function collect() {
+  const lines = readLines().filter(l => l.code || l.desc);
+  const sub = lines.reduce((s, l) => s + l.amount, 0);
+  const tax = lines.reduce((s, l) => s + l.tax, 0);
+  return {
+    docNo: $('docNo').value.trim(), docDate: $('docDate').value, debtor: $('debtor').value.trim(),
+    company: $('company').value.trim(), terms: $('terms').value.trim(), currency: $('currency').value.trim(),
+    ref: $('ref').value.trim(), agent: $('agent').value.trim(), remark: $('remark').value.trim(),
+    docStatus: $('docStatus').value, submitEInv: $('submitEInv').value, consolEInv: $('consolEInv').value,
+    lines, sub, tax, total: sub + tax
+  };
+}
+
+// Body shape follows Postman: Sales > Invoice > Create Invoice (POST /api/Invoice, an array of invoices).
+// Empty fields are left out so AutoCount fills them from Debtor / Item maintenance.
+function toApiPayload(d) {
+  const put = (o, k, v) => { if (v !== '' && v != null) o[k] = String(v); return o; };
+  const inv = {};
+  put(inv, 'DebtorCode', d.debtor);
+  put(inv, 'DocNo', d.docNo);
+  put(inv, 'DocDate', d.docDate);
+  put(inv, 'DebtorName', d.company);
+  put(inv, 'CC', d.currency);
+  put(inv, 'DocStatus', d.docStatus);
+  put(inv, 'SubmitEInvoice', d.submitEInv);
+  put(inv, 'ConsolidatedEInvoice', d.consolEInv);
+  put(inv, 'DisplayTerm', d.terms);
+  put(inv, 'Ref', d.ref);
+  put(inv, 'SalesAgent', d.agent);
+  put(inv, 'Remark1', d.remark);
+  inv.IVDTL = d.lines.map(l => {
+    const o = {};
+    put(o, 'ItemCode', l.code);
+    put(o, 'Description', l.desc);
+    put(o, 'UOM', l.uom);
+    put(o, 'Qty', l.qty);
+    put(o, 'UnitPrice', l.price);
+    if (l.disc > 0) o.Discount = l.disc + '%';   // doc example "5" is an amount; "5%" is a percent
+    put(o, 'TaxCode', l.taxCode);
+    return o;
+  });
+  return [inv];
+}
+
+function validate(d) {
+  if (!d.debtor) return '请填写客户代码';
+  if (!d.docDate) return '请选择日期';
+  if (!d.lines.length) return '至少需要一行明细';
+  if (d.lines.some(l => !l.code)) return '每一行都需要货品代码';
+  if (d.lines.some(l => l.qty <= 0)) return '数量必须大于 0';
+  return null;
+}
+
+function setStatus(msg, cls = '') { const s = $('status'); s.textContent = msg; s.className = cls; }
+
+$('btnJson').onclick = () => {
+  const o = $('out'); o.hidden = !o.hidden;
+  o.textContent = JSON.stringify(toApiPayload(collect()), null, 2);
+};
+$('btnCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(JSON.stringify(toApiPayload(collect()), null, 2)); setStatus('已复制', 'ok'); }
+  catch { setStatus('复制失败,请用"查看 JSON"手动复制', 'err'); }
+};
+
+$('btnPrint').onclick = () => {
+  const d = collect();
+  const err = validate(d);
+  if (err) return setStatus(err, 'err');
+  $('invoice').innerHTML = `
+    <h3>SALES INVOICE</h3>
+    <div class="meta">
+      <div><b>${esc(d.company || d.debtor)}</b><br>Code: ${esc(d.debtor)}<br>Terms: ${esc(d.terms)}</div>
+      <div style="text-align:right">No: ${esc(d.docNo || '(auto)')}<br>Date: ${esc(d.docDate)}<br>Ref: ${esc(d.ref)}<br>Agent: ${esc(d.agent)}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr><th>#</th><th>Item</th><th>Description</th><th style="text-align:right">Qty</th><th>UOM</th>
+        <th style="text-align:right">Price</th><th style="text-align:right">Disc%</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>${d.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.code)}</td><td>${esc(l.desc)}</td>
+        <td style="text-align:right">${l.qty}</td><td>${esc(l.uom)}</td><td style="text-align:right">${money(l.price)}</td>
+        <td style="text-align:right">${l.disc}</td><td style="text-align:right">${money(l.amount)}</td></tr>`).join('')}</tbody>
+    </table>
+    <div style="margin:12px 0 0 auto;width:240px">
+      <div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>${money(d.sub)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Tax</span><span>${money(d.tax)}</span></div>
+      <div style="display:flex;justify-content:space-between;font-weight:700;border-top:1px solid #000;margin-top:4px;padding-top:4px"><span>Total ${esc(d.currency)}</span><span>${money(d.total)}</span></div>
+    </div>
+    ${d.remark ? `<p>Remark: ${esc(d.remark)}</p>` : ''}`;
+  window.print();
+};
+
+// On localhost the page talks to server.js, which forwards to the real gateway (no CORS).
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Strips spaces, quotes and braces that sneak in when copying from Postman.
+function cleanAppId() { return $('appId').value.trim().replace(/^["'{]+|["'}]+$/g, '').trim(); }
+
+// Served over http(s) (server.js locally, or the Netlify function online) the page calls /api/* on its own
+// origin and the server forwards it to the gateway (no CORS). Opened from a file it calls the gateway directly.
+const viaProxy = location.protocol === 'http:' || location.protocol === 'https:';
+function api(base, path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  const appId = cleanAppId();
+  if (appId) headers['AppId'] = appId;
+  if (viaProxy) { headers['X-Target-Base'] = base; return fetch(path, { ...opts, headers }); }
+  return fetch(base + path, { ...opts, headers });
+}
+
+async function login(base) {
+  const body = $('loginBody').value
+    .replace('{{user}}', JSON.stringify($('user').value).slice(1, -1))
+    .replace('{{pass}}', JSON.stringify($('pass').value).slice(1, -1));
+  const r = await api(base, $('loginPath').value, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`Login 失败 (${r.status}): ${text.slice(0, 200)}`);
+  let j; try { j = JSON.parse(text); } catch { j = { [$('tokenField').value]: text.trim() }; }
+  if (Array.isArray(j)) j = j[0] || {};
+  const t = j[$('tokenField').value] ?? j.Token ?? j.token ?? j.access_token;
+  if (!t) throw new Error('Login 失败: ' + (j.Message || text.slice(0, 200)));
+  const jwt = j.JWTToken && !String(j.JWTToken).includes('{{') ? String(j.JWTToken) : '';
+  return { token: String(t), jwt };
+}
+
+// Postman uses X-API-Key = {{token}} (login "Token") and Authorization = {{Authorization}}.
+function authHeaders() {
+  const mode = $('authMode').value;
+  const auth = mode === 'token' ? token.token
+    : mode === 'bearer' ? 'Bearer ' + (token.jwt || token.token)
+    : (token.jwt || token.token);
+  return { 'Authorization': auth, 'X-API-Key': token.token };
+}
+
+$('btnSend').onclick = async () => {
+  const d = collect();
+  const err = validate(d);
+  if (err) return setStatus(err, 'err');
+  const base = $('baseUrl').value.trim().replace(/\/$/, '');
+  if (!base || !$('invPath').value.trim()) { $('conn').open = true; return setStatus('请先填写 Base URL 与 Invoice 路径', 'err'); }
+  if (!confirm(`确认向 AutoCount 创建发票?\n客户: ${d.debtor}\n总计: ${money(d.total)} ${d.currency}`)) return;
+  $('btnSend').disabled = true; setStatus('发送中…');
+  try {
+    if (!GUID.test(cleanAppId())) {
+      $('conn').open = true;
+      throw new Error('AppId 必须是 GUID,格式 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx(共 36 个字符)。请填入 AppId 的实际值,不是变量名 {{AppId-Demo}}');
+    }
+    if (!token) token = await login(base);
+    const sentBody = JSON.stringify(toApiPayload(d));
+    const r = await api(base, $('invPath').value.trim(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: sentBody
+    });
+    const text = await r.text();
+    if (r.status === 401) token = null;
+    if (!r.ok) {
+      $('out').hidden = false;
+      $('out').textContent = `请求头: ${Object.keys({ 'Content-Type': 1, ...authHeaders(), AppId: 1 }).join(', ')}\n请求体: ${sentBody}\n\n响应 ${r.status}: ${text.slice(0, 1500)}`;
+      throw new Error(`API 返回 ${r.status}: ${(() => { try { return JSON.parse(text).Message; } catch { return text.slice(0, 200); } })()}`);
+    }
+    let j = null; try { j = JSON.parse(text); } catch {}
+    if (j && ((j.Status && j.Status !== 'Success') || (!j.Status && j.Message))) throw new Error(`AutoCount: ${j.Status || ''} ${j.Message || ''}`);
+    const no = j && j.ResultTable && j.ResultTable[0] && j.ResultTable[0].DocNo;
+    setStatus(no ? `发送成功,发票号码 ${no}` : '发送成功', 'ok');
+    $('out').hidden = false; $('out').textContent = j ? JSON.stringify(j, null, 2) : text;
+  } catch (e) {
+    setStatus(e.message + (e instanceof TypeError ? '(可能是 CORS 或网络问题)' : ''), 'err');
+  } finally { $('btnSend').disabled = false; }
+};
+
+addLine({ code: '002', qty: 10, uom: 'UNIT', price: 99 });
+</script>
+</body>
+</html>
