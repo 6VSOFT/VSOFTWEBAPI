@@ -13,6 +13,10 @@
   body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
   main { max-width:1000px; margin:0 auto; padding:16px; display:grid; gap:16px; }
   h1 { font-size:20px; margin:0; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .btn-link { padding:7px 14px; border:1px solid var(--accent); border-radius:6px; color:var(--accent); text-decoration:none; font-weight:600; }
+  .btn-link:hover { background:var(--accent); color:#fff; }
+  @media print { .topbar .btn-link { display:none; } }
   .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; }
   .card h2 { font-size:15px; margin:0 0 12px; }
   .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
@@ -53,7 +57,10 @@
 </head>
 <body>
 <main>
-  <h1>Generate Sales Invoice</h1>
+  <div class="topbar">
+    <h1>Generate Sales Invoice</h1>
+    <a class="btn-link" href="SalesInvoiceV2.html">Sales Invoice V2</a>
+  </div>
 
   <details class="card" id="conn">
     <summary>连接设置 (VSOFT Web API)</summary>

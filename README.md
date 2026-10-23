@@ -6,11 +6,12 @@
 
 ## 文件
 
-- `sales-invoice.html`:发票表单页面。
+- `sales-invoice.html`:发票表单页面。页面右上角的 **Sales Invoice V2** 按钮会跳转到 `SalesInvoiceV2.html`。
+- `SalesInvoiceV2.html`:V2 页面,内容与 `sales-invoice.html` 相同,按钮改为返回原页面。
 - `server.js`:本机小服务器,提供页面,并把 `/api/*` 请求转发给 VSOFT 网关(避免浏览器 CORS 拦截)。
 - `netlify/functions/proxy.mts`:在线版使用的同样的转发代理(Netlify 函数)。
 - `netlify.toml`:Netlify 设置,发布 `public` 文件夹。
-- `public/index.html`:`sales-invoice.html` 的副本,供 Netlify 发布。改页面时两处要一起更新。
+- `public/index.html`、`public/SalesInvoiceV2.html`:上面两个页面的副本,供 Netlify 发布。改页面时两处要一起更新。
 
 两个代理都只允许转发到 `vsoftapi.vsoft2u.my`。
 
