@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1f6feb">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-192.png">
@@ -48,6 +48,53 @@
   pre { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; overflow:auto; max-height:260px; font-size:12px; margin:8px 0 0; }
   details summary { cursor:pointer; font-weight:600; }
   .note { color:var(--mute); font-size:12px; margin:6px 0 0; }
+
+  /* Phones */
+  @media (max-width:640px) {
+    body { -webkit-text-size-adjust:100%; }
+    main { padding:12px max(12px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); gap:12px; }
+    h1 { font-size:18px; }
+    .card { padding:12px; }
+    .grid { grid-template-columns:1fr 1fr; gap:10px; }
+    input, select, textarea { font-size:16px; padding:9px 10px; }   /* >=16px stops iOS zoom-on-focus */
+    button, .btn-link { min-height:42px; }
+    #debtorBtn, .itemBtn { width:42px; }
+    .combo-wrap input { padding-right:46px; }
+    .combo-list { width:100%; max-width:100%; }
+    #itemList { left:0 !important; right:0; top:auto !important; bottom:0; width:100%; max-width:100%; border-radius:12px 12px 0 0; padding-bottom:env(safe-area-inset-bottom); }
+    #itemList .combo-items, .combo-items { max-height:45vh; }
+    .combo-item { padding:11px 12px; }
+
+    /* Line items: one card per row instead of a wide table */
+    .lines-wrap { overflow-x:visible; }
+    .lines-wrap table { min-width:0; }
+    .lines-wrap thead { display:none; }
+    .lines-wrap table, .lines-wrap tbody { display:block; }
+    .lines-wrap tr { display:grid; grid-template-columns:1fr 1fr; gap:8px 10px; padding:12px 0; border-top:1px solid var(--line); }
+    .lines-wrap tr:first-child { border-top:0; padding-top:0; }
+    .lines-wrap td { display:block; padding:0; min-width:0; }
+    .lines-wrap td::before { display:block; font-size:12px; color:var(--mute); margin-bottom:2px; }
+    .lines-wrap td:nth-child(1), .lines-wrap td:nth-child(2) { grid-column:1 / -1; }
+    .lines-wrap td:nth-child(1)::before { content:"货品代码"; }
+    .lines-wrap td:nth-child(2)::before { content:"描述"; }
+    .lines-wrap td:nth-child(3)::before { content:"数量"; }
+    .lines-wrap td:nth-child(4)::before { content:"单位"; }
+    .lines-wrap td:nth-child(5)::before { content:"单价"; }
+    .lines-wrap td:nth-child(6)::before { content:"折扣%"; }
+    .lines-wrap td:nth-child(7)::before { content:"税码"; }
+    .lines-wrap td:nth-child(8)::before { content:"税率%"; }
+    .lines-wrap td:nth-child(9)::before { content:"小计"; }
+    .lines-wrap td.num { text-align:left; padding:0; align-self:end; font-weight:600; font-size:15px; }
+    .lines-wrap td:nth-child(10) { grid-column:1 / -1; }
+    .lines-wrap td:nth-child(10) button { width:100%; color:var(--err); }
+    .lines-wrap td:nth-child(10) button::after { content:" 删除此行"; }
+    .totals { width:100%; }
+    .row > button { flex:1 1 calc(50% - 4px); }
+    .row > #btnSend { flex-basis:100%; order:-1; }
+    #status { flex-basis:100%; }
+    #addLine { flex-basis:100%; }
+  }
+  @media (max-width:360px) { .grid { grid-template-columns:1fr; } }
 
   /* Printable invoice */
   #print { display:none; }
