@@ -7,7 +7,7 @@
 ## 文件
 
 - `sales-invoice.html`:发票表单页面。页面右上角的 **Sales Invoice V2** 按钮会跳转到 `SalesInvoiceV2.html`。
-- `SalesInvoiceV2.html`:V2 页面,与 `sales-invoice.html` 相同,另有:按钮改为返回原页面;客户代码框右侧的 ▾ 下拉按钮,可从 VSOFT(`POST /api/Debtor/GetDebtor/`)读取客户列表、搜索并选择,选中后自动填入客户代码、名称和币种。
+- `SalesInvoiceV2.html`:V2 页面,与 `sales-invoice.html` 相同,另有:按钮改为返回原页面;客户代码框右侧的 ▾ 下拉按钮,可从 VSOFT(`POST /api/Debtor/GetDebtor/`)读取客户列表、搜索并选择,选中后自动填入客户代码、名称和币种;每行货品代码框右侧也有 ▾ 下拉按钮,从 VSOFT(`GET /api/Item/GetItem`)读取货品列表,可搜索,选中后自动填入该行的货品代码、描述、单位和单价。
 - `server.js`:本机小服务器,提供页面,并把 `/api/*` 请求转发给 VSOFT 网关(避免浏览器 CORS 拦截)。
 - `netlify/functions/proxy.mts`:在线版使用的同样的转发代理(Netlify 函数)。
 - `netlify.toml`:Netlify 设置,发布 `public` 文件夹。

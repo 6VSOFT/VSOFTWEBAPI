@@ -16,8 +16,10 @@
   .combo { position:relative; }
   .combo-wrap { position:relative; }
   .combo-wrap input { padding-right:38px; }
-  #debtorBtn { position:absolute; top:1px; right:1px; bottom:1px; width:34px; padding:0; border:0; border-left:1px solid var(--line); border-radius:0 5px 5px 0; background:transparent; color:var(--mute); font-size:14px; }
-  #debtorBtn:hover { color:var(--accent); }
+  #debtorBtn, .itemBtn { position:absolute; top:1px; right:1px; bottom:1px; width:34px; padding:0; border:0; border-left:1px solid var(--line); border-radius:0 5px 5px 0; background:transparent; color:var(--mute); font-size:14px; }
+  #debtorBtn:hover, .itemBtn:hover { color:var(--accent); }
+  #itemList { position:fixed; margin:0; width:420px; max-width:92vw; }
+  .combo-item .nm { min-width:0; }
   .combo-list { position:absolute; left:0; top:100%; margin-top:4px; z-index:30; width:max(100%,340px); max-width:90vw; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.18); overflow:hidden; }
   .combo-list .combo-search { border:0; border-bottom:1px solid var(--line); border-radius:0; }
   .combo-items { max-height:280px; overflow-y:auto; }
@@ -196,7 +198,7 @@ $('baseUrl').oninput = () => { token = null; $('env').value = [...$('env').optio
 function addLine(v = {}) {
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input data-k="code" value="${esc(v.code)}"></td>
+    <td><div class="combo-wrap"><input data-k="code" value="${esc(v.code)}" autocomplete="off"><button type="button" class="itemBtn" title="从 AutoCount 选择货品" aria-label="选择货品">▾</button></div></td>
     <td><input data-k="desc" value="${esc(v.desc)}"></td>
     <td><input data-k="qty" type="number" min="0" step="any" value="${v.qty ?? 1}"></td>
     <td><input data-k="uom" placeholder="默认" value="${esc(v.uom ?? '')}"></td>
@@ -461,6 +463,86 @@ dList.addEventListener('click', e => {
 });
 document.addEventListener('click', e => { if (!e.target.closest('.combo')) closeDebtorList(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDebtorList(); });
+// ---- Item code dropdown: list stock items from GET /api/Item/GetItem (V2 only) ----
+let items = null;    // cached after the first successful load
+let itemRow = null;  // the <tr> the open list belongs to
+const iList = document.createElement('div');
+iList.id = 'itemList'; iList.className = 'combo-list'; iList.hidden = true;
+document.body.appendChild(iList);
+
+async function loadItems() {
+  const base = $('baseUrl').value.trim().replace(/\/$/, '');
+  if (!GUID.test(cleanAppId())) throw new Error('请先在"连接设置"填写 AppId、账号和密码');
+  if (!token) token = await login(base);
+  const r = await api(base, '/api/Item/GetItem', { method: 'GET', headers: authHeaders() });
+  const text = await r.text();
+  if (r.status === 401) token = null;
+  if (!r.ok) throw new Error(`API 返回 ${r.status}`);
+  let j; try { j = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
+  const arr = Array.isArray(j) ? j : j.ResultTable;
+  if (!Array.isArray(arr)) throw new Error(j.Message || '没有取得货品列表');
+  return arr.filter(x => x && x.ItemCode && x.IsActive !== 'F');
+}
+
+function itemDefaults(x) {
+  const uom = x.BaseUOM || (x.ItemDTL && x.ItemDTL[0] && x.ItemDTL[0].UOM) || '';
+  const dtl = (x.ItemDTL || []).find(d => d.UOM === uom);
+  return { uom, price: dtl && dtl.Price > 0 ? dtl.Price : null };
+}
+
+function renderItems(filter = '') {
+  const q = filter.trim().toLowerCase();
+  const rows = items.filter(x => !q || String(x.ItemCode).toLowerCase().includes(q) || String(x.Description || '').toLowerCase().includes(q));
+  $('iItems').innerHTML = rows.slice(0, 200).map(x =>
+    `<div class="combo-item" data-i="${items.indexOf(x)}"><span>${esc(x.ItemCode)}</span><span class="nm">${esc(x.Description || '')}</span></div>`).join('')
+    || '<div class="combo-msg">没有符合的货品</div>';
+}
+
+function closeItemList() { iList.hidden = true; itemRow = null; }
+
+async function openItemList(btn) {
+  const tr = btn.closest('tr');
+  if (!iList.hidden && itemRow === tr) return closeItemList();
+  itemRow = tr;
+  const r = btn.closest('.combo-wrap').getBoundingClientRect();
+  iList.style.left = Math.max(8, Math.min(r.left, innerWidth - 430)) + 'px';
+  iList.style.top = (r.bottom + 4) + 'px';
+  iList.hidden = false;
+  iList.innerHTML = '<div class="combo-msg">载入货品列表…</div>';
+  try {
+    if (!items) items = await loadItems();
+    if (itemRow !== tr) return;
+    iList.innerHTML = '<input class="combo-search" id="iSearch" placeholder="搜索货品代码或描述" autocomplete="off"><div class="combo-items" id="iItems"></div>';
+    renderItems();
+    $('iSearch').focus();
+    $('iSearch').oninput = e => renderItems(e.target.value);
+  } catch (e) {
+    iList.innerHTML = `<div class="combo-msg err">${esc(e.message)}</div>`;
+  }
+}
+
+$('lines').addEventListener('click', e => {
+  const b = e.target.closest('.itemBtn');
+  if (b) { e.stopPropagation(); openItemList(b); }
+});
+iList.addEventListener('click', e => {
+  e.stopPropagation();
+  const it = e.target.closest('.combo-item');
+  if (!it || !itemRow) return;
+  const x = items[+it.dataset.i], d = itemDefaults(x), set = (k, v) => { itemRow.querySelector(`[data-k="${k}"]`).value = v; };
+  set('code', x.ItemCode);
+  set('desc', x.Description || '');
+  if (d.uom) set('uom', d.uom);
+  if (d.price != null) set('price', d.price);
+  closeItemList();
+  recalc();
+});
+document.addEventListener('click', e => { if (!e.target.closest('#itemList')) closeItemList(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeItemList(); });
+window.addEventListener('resize', closeItemList);
+$('env').addEventListener('change', () => { items = null; });
+$('baseUrl').addEventListener('input', () => { items = null; });
+
 $('env').addEventListener('change', () => { debtors = null; });
 $('baseUrl').addEventListener('input', () => { debtors = null; });
 
