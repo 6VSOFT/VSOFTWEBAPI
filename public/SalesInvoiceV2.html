@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f6feb">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sales Invoice">
 <title>Generate Sales Invoice</title>
 <style>
   :root { --bg:#f5f6f8; --card:#fff; --ink:#1c2430; --mute:#6b7585; --line:#dde1e8; --accent:#1f6feb; --ok:#1a7f37; --err:#cf222e; }
@@ -547,6 +554,9 @@ $('env').addEventListener('change', () => { debtors = null; });
 $('baseUrl').addEventListener('input', () => { debtors = null; });
 
 addLine({ code: '002', qty: 10, uom: 'UNIT', price: 99 });
+</script>
+<script>
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 </script>
 </body>
 </html>
