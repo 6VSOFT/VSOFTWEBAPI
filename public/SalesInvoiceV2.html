@@ -535,8 +535,17 @@ async function loadItems() {
   const base = $('baseUrl').value.trim().replace(/\/$/, '');
   if (!GUID.test(cleanAppId())) throw new Error('请先在"连接设置"填写 AppId、账号和密码');
   if (!token) token = await login(base);
-  const r = await api(base, '/api/Item/GetItem', { method: 'GET', headers: authHeaders() });
-  const text = await r.text();
+  let r = await api(base, '/api/Item/GetItem', { method: 'GET', headers: authHeaders() });
+  let text = await r.text();
+  // The gateway answers 500 "Cannot send a content-body with this verb-type" when it wants a POST (like GetDebtor).
+  if (r.status === 500 && /content-body|verb/i.test(text)) {
+    r = await api(base, '/api/Item/GetItem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ ItemCode: [] })
+    });
+    text = await r.text();
+  }
   if (r.status === 401) token = null;
   if (!r.ok) throw new Error(apiErrorText(r, text));
   let j; try { j = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
