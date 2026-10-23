@@ -549,8 +549,11 @@ async function loadItems() {
   if (r.status === 401) token = null;
   if (!r.ok) throw new Error(apiErrorText(r, text));
   let j; try { j = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
-  const arr = Array.isArray(j) ? j : j.ResultTable;
-  if (!Array.isArray(arr)) throw new Error(j.Message || '没有取得货品列表');
+  // V2 wraps the result: [ { ResultTable: [ ...items ], Status, Message } ]; V1 is { ResultTable: [...] } or a bare array.
+  const first = Array.isArray(j) ? j[0] : j;
+  if (first && first.Status && first.Status !== 'Success') throw new Error(first.Message || first.Status);
+  const arr = Array.isArray(j) && j.length && j[0] && j[0].ItemCode ? j : (first && first.ResultTable);
+  if (!Array.isArray(arr)) throw new Error((first && first.Message) || '没有取得货品列表');
   return arr.filter(x => x && x.ItemCode && x.IsActive !== 'F').slice(0, ITEM_LIMIT);
 }
 
